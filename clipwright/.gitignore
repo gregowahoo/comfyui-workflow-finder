@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+clipwright_config.json
+projects/
+workflows/*.json
+!workflows/README.md

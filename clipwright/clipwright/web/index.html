@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipwright</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div class="brand">🎬 Clipwright</div>
+  <select id="projectSelect"></select>
+  <button id="newProjectBtn">＋ New Project</button>
+  <span id="comfyStatus" class="pill">ComfyUI: …</span>
+  <span class="spacer"></span>
+  <button id="historyBtn">🕘 History</button>
+</header>
+
+<main>
+  <aside id="tree">
+    <div class="tree-toolbar">
+      <button id="genStoryBtn" title="Generate the full chapter/scene structure from an idea or the bible docs">✨ Generate Story</button>
+      <button id="addChapterBtn">＋ Chapter</button>
+    </div>
+    <div id="treeBody"></div>
+  </aside>
+
+  <section id="editor">
+    <div id="editorEmpty" class="empty">Select something on the left —<br>or create a project and hit <b>✨ Generate Story</b>.</div>
+    <div id="editorBody" style="display:none"></div>
+  </section>
+
+  <aside id="side">
+    <div class="side-tabs">
+      <button data-tab="proposals" class="active">Proposals</button>
+      <button data-tab="renders">Renders</button>
+    </div>
+    <div id="sideProposals" class="side-panel"></div>
+    <div id="sideRenders" class="side-panel" style="display:none"></div>
+  </aside>
+</main>
+
+<div id="modal" class="modal-back" style="display:none">
+  <div class="modal" id="modalBox"></div>
+</div>
+<div id="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "ltx23",
+  "label": "LTX 2.3 (video)",
+  "kind": "video",
+  "guidance": "Write LTX video prompts as ONE continuous present-tense paragraph of cinematic prose, 60-150 words. Structure: start with the main subject and its action, then describe the motion in chronological order, then camera movement (dolly, pan, orbit, handheld, static...), then lighting and atmosphere, then overall mood/style. Be concrete and physical: describe what moves and how (speed, direction, weight). Avoid abstract words like 'beautiful' or 'epic'; avoid lists, avoid quotation marks, avoid negations ('no', 'without') in the positive prompt. Keep character and location descriptions consistent with the project bible wording. If the clip starts from a reference image, focus the prompt on MOTION and camera rather than re-describing static appearance.",
+  "negative_default": "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text overlay"
+}

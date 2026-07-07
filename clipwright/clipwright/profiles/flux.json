@@ -1,0 +1,7 @@
+{
+  "name": "flux",
+  "label": "Flux dev/Krea (image)",
+  "kind": "image",
+  "guidance": "Write Flux image prompts as natural-language prose, 40-120 words, one paragraph. Describe: subject and appearance (faithful to the project bible), pose/expression, environment and time of day, lighting quality (direction, color, softness), camera framing (shot size, lens feel, angle), and style/grade. No tag lists, no weights syntax, no negative-embedding jargon. Concrete nouns and specific materials beat adjectives. This image is the START FRAME of a video clip, so compose it as the first moment of the clip's action with room for the described motion to happen.",
+  "negative_default": ""
+}

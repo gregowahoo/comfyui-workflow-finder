@@ -1,0 +1,7 @@
+{
+  "name": "qwen_image",
+  "label": "Qwen-Image (image)",
+  "kind": "image",
+  "guidance": "Write Qwen-Image prompts as clear descriptive prose, 40-120 words. Lead with the full scene description: subject with precise appearance details (faithful to the project bible), action/pose, environment, lighting, and camera framing. Qwen-Image excels at coherent detail and any in-image text rendering - if the shot needs readable text (signs, screens, titles), quote the exact text in double quotes. End with a brief style clause (e.g. 'cinematic film still, shallow depth of field'). This image is the START FRAME of a video clip, so compose it as the first moment of the clip's action.",
+  "negative_default": "lowres, bad anatomy, extra digits, watermark, jpeg artifacts"
+}
