@@ -1,597 +1,591 @@
-# ComfyUI Fantastic MiniMax H3 Prompt Builder — How to Use It
+<!-- Generated from make.js — edit that, not this file. -->
 
-A practical guide to **ComfyUI-Fantastic-MiniMaxH3-PromptBuilder** by
-Adudeguyman ([GitHub](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder),
-MIT, v1.6.0 at time of writing).
+# MiniMax H3 Prompt Builder
 
-Everything below was checked against the pack's source (`nodes.py`,
-`media_io.py`, `web_api.py`, `web/promptbuilder.js`) rather than the marketing
-blurb, so the slot names, limits and prompt formats are the ones the code
-actually produces.
+*A beginner's guide to the ComfyUI custom node*
 
----
+**Node pack:** ComfyUI-Fantastic-MiniMaxH3-PromptBuilder
 
-## 1. What problem it solves
+**Author:** Adudeguyman   ·   **Licence:** MIT   ·   **Version covered:** 1.6.0
 
-MiniMax **H3** is an open-weight video+audio model. It does *not* want a casual
-sentence — it wants a structured prompt with named sections, shot markers,
-timestamps, speaker IDs and `<Picture N>` / `<Video N>` / `<Audio N>` tags
-pointing at your reference media. MiniMax normally runs your idea through a
-rewriter model (`H3-Context-IR`) to produce that structure, and that rewriter
-was never open-sourced.
+Repository: [github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder](https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder)
 
-This pack is the hand-driven replacement: a fillable editor per mode, live
-validation against MiniMax's *Video Prompt Writing Guide* (the PDF ships in
-`web/`, reachable from the 📖 button), and a media loader that keeps reference
-tag numbering straight.
+> **Read this first.** You do not need to understand everything here before you start. Sections 1 to 6 get you a working video. Everything after that is there for when you need it.
 
-It **only replaces how the prompt gets written**. Loaders, sampler, VAE decode
-and save stay exactly as in ComfyUI's built-in H3 templates.
+## 1. What this node actually does
 
----
+**MiniMax H3** is a free, open-weight AI model that makes short videos with sound. It is very good. It is also very fussy about how you talk to it.
 
-## 2. Requirements
+Most video models are happy with a plain sentence: *"a woman walking through a rainy street at night."* H3 is not. H3 expects a structured document — labelled sections, shot numbers, exact timestamps, speaker IDs, and special tags that point at the images and clips you gave it. Feed it a plain sentence and you get a disappointing result, because you have skipped most of the form it was trained to read.
 
-| Thing | Why |
+MiniMax's own solution was a second AI, called the rewriter, that turned your casual sentence into that structured document for you. **They never released it.** So everyone using H3 locally has to write the structured version by hand.
+
+> **In one line.** This node pack is the form. You fill in labelled boxes, it assembles the correctly formatted prompt underneath, and it warns you when something breaks H3's rules.
+
+It changes nothing else about your workflow. Your model loaders, sampler, VAE decode and save nodes stay exactly as they are in ComfyUI's built-in H3 templates. This pack only replaces the box where the prompt text comes from.
+
+## 2. Words you will see in this guide
+
+Only a handful of terms matter, and two of them are constantly confused with each other.
+
+| Term | What it means |
 |---|---|
-| **ComfyUI ≥ 0.30.0** | when native H3 support landed (`requires-comfyui` in `pyproject.toml`) |
-| **Python ≥ 3.9** | |
-| **H3 checkpoints** | `fl2va` for text/keyframe modes, `ref2va` for reference mode |
-| **PyAV (`pip install av`) or ffmpeg on PATH** | **only** for reference *videos*. Images and audio work without either. |
+| **Node** | One box on the ComfyUI canvas. You drag wires between them. |
+| **Slot / input / output** | The little dots on a node's left (inputs) and right (outputs) that wires plug into. |
+| **Mode** | Which kind of generation you are doing — text only, starting from a picture, and so on. There are five. See section 7. |
+| **Keyframe** | A picture that *is* an actual frame of your finished video — the exact first or last frame. Not a suggestion. |
+| **Reference** | A picture, clip or sound that the model should *draw ideas from* — a face to keep consistent, a look, a voice. Not a frame of the output. |
+| **Tag** | How your prompt text points at your media: `<Picture 1>`, `<Video 2>`, `<Audio 1>`, `<Subject 1>`. |
+| **Shot** | One continuous camera take inside your video. Written `[Shot 1]`, `[Shot 2]` and so on. |
 
-If neither PyAV nor ffmpeg is found the pack still loads — videos are simply
-rejected at drop time with an explanation, instead of failing at queue time.
+> **Keyframe vs reference is the big one.** A keyframe is a frame of the output. A reference is inspiration. They go to different nodes and different slots, and mixing them up is the single most common beginner mistake. Section 7 and section 9 keep them apart.
 
-**Accepted files** (from `web_api.py`):
+## 3. What you need before you start
 
-- pictures — `jpg`, `jpeg`, `png`, `webp`, `gif`, `bmp`
-- video — `mp4`, `mov`, `mkv`, `webm`, `avi`, `m4v`
-- audio — `wav`, `mp3`, `flac`, `ogg`, `aac`, `m4a`
+| You need | Why |
+|---|---|
+| **ComfyUI version 0.30.0 or newer** | This is when ComfyUI added support for H3 at all. Older versions will not work. |
+| **The H3 model files** | Two of them. `fl2va` for text and picture modes; `ref2va` for reference mode. ComfyUI's own H3 templates will point you at these. |
+| **PyAV or ffmpeg** | **Only** if you want to use reference *videos*. Pictures and audio work without it. |
+On that last one: there is a good chance you already have it. Many ComfyUI installs ship with ffmpeg, and PyAV comes bundled with several popular node packs. The easy test is to drag a video file onto the Media Loader once you have installed everything. If it is accepted, you are fine. If it is refused, run this in your ComfyUI Python environment:
 
----
+```
+pip install av
+```
+The pack will not crash without it — it just tells you videos are unavailable, rather than failing halfway through a render.
 
-## 3. Install
+### File types it accepts
 
-**Git**
+| Kind | Extensions |
+|---|---|
+| Pictures | `jpg` · `jpeg` · `png` · `webp` · `gif` · `bmp` |
+| Video | `mp4` · `mov` · `mkv` · `webm` · `avi` · `m4v` |
+| Audio | `wav` · `mp3` · `flac` · `ogg` · `aac` · `m4a` |
 
-```bash
+## 4. Installing it
+
+Pick whichever of these three you are comfortable with. They all end up in the same place.
+
+#### Option A — ComfyUI Manager (easiest)
+
+Open the Manager, search for **Fantastic H3 Prompt Builder**, click Install.
+
+#### Option B — git
+
+```
 cd ComfyUI/custom_nodes
 git clone https://github.com/Adudeguyman/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder
-pip install av        # only if you want reference videos and lack ffmpeg
+
+pip install av      # only if you want reference videos and lack ffmpeg
 ```
 
-**ComfyUI Manager** — search **"Fantastic H3 Prompt Builder"**.
+#### Option C — manual
 
-**Manual** — unzip so you end up with
-`ComfyUI/custom_nodes/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/`.
+Download the ZIP from the repository and extract it into `ComfyUI/custom_nodes/` so that you end up with a folder at `ComfyUI/custom_nodes/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/`.
 
-Then **fully restart ComfyUI** — a browser refresh is not enough; nodes are only
-registered at startup. Confirm by searching the node menu for `MiniMax H3` —
-four nodes should appear under **conditioning → video_models**.
+### Then restart — properly
 
----
+> **Refreshing the browser is not enough.** ComfyUI only registers new nodes when it starts up. Close ComfyUI completely and start it again.
 
-## 4. The four nodes
+To check it worked, double-click the empty canvas and search for **MiniMax H3**. Four nodes should appear. If they do not, jump to section 17.
 
-| Display name | Internal class | Inputs | Outputs |
-|---|---|---|---|
-| **Fantastic H3 Prompt Builder** | `MiniMaxH3PromptBuilder` | `prompt_text`, `builder_state` (both written by the editor UI), optional `references` + `picture_1…9`, `video_1…3`, `video_audio_1…3`, `audio_1…3` | `prompt` (STRING), the same 18 media slots as pass-throughs, and `references` (H3_REFS) in the last slot |
-| **Fantastic H3 Media Loader** | `MiniMaxH3MediaLoader` | `media_state` (written by its panel) | `references` (H3_REFS) |
-| **Fantastic H3 Reference Splitter** | `MiniMaxH3ReferenceSplitter` | `references` (H3_REFS) | 18 slots: `picture_1…9`, `video_1…3`, `video_audio_1…3`, `audio_1…3` |
-| **Fantastic H3 Filename Prefix** | `MiniMaxH3FilenamePrefix` | `folder`, `subfolder`, `date_folder`, `filename` | `filename_prefix` (STRING) |
+## 5. The four nodes
 
-Capacity constants in `nodes.py`: **9 pictures, 3 videos, 3 paired video
-soundtracks, 3 standalone audio clips**.
+All four live under **conditioning → video_models** in the node menu. You only need the first two to get going; the other two are conveniences you can ignore for now.
 
-Only the Prompt Builder and Media Loader are essential. The Splitter is for
-routing media around the builder; the Filename Prefix is a convenience for
-dated output folders.
-
----
-
-## 5. Quick start (any mode)
-
-1. Add a **Fantastic H3 Prompt Builder**.
-2. Click **Edit prompt…**, pick a mode along the top, fill in the fields. The
-   finished prompt assembles live in the right-hand panel.
-3. Click **Save to node**. *This is the only action that changes what the node
-   sends* — ✕, Cancel and Escape all discard.
-4. Wire the builder's `prompt` output into the `prompt` input of the H3 node:
-   - **MiniMax H3 Image to Video** — for T2VA, I2VA, FL2VA, L2VA
-   - **MiniMax H3 Reference to Video** — for reference mode
-
-   If `prompt` shows as a widget instead of an input, right-click →
-   *Convert widget to input*.
-5. Set `width`, `height`, `length` on the H3 node. For first/last-frame modes
-   the editor prints the exact frame count to use — copy it.
-6. Wire whatever the mode needs (section 6).
-7. Queue.
-
----
-
-## 6. The five modes
-
-| Mode | You supply | Media the node will actually send | Good for |
-|---|---|---|---|
-| **T2VA** | text only | nothing but the prompt | building a scene from scratch |
-| **I2VA** | one image | `picture_1` → `first_frame` | animating forward from a still |
-| **FL2VA** | two images | `picture_1` → `first_frame`, `picture_2` → `last_frame` | getting from A to B |
-| **L2VA** | one image | `picture_1` → `last_frame` | working backwards to a known ending |
-| **REF** | any mix of 9 pictures / 3 videos / 3 audio | everything, into `ref_*` slots | locking a character, style, voice or motion |
-
-**The saved mode gates the outputs.** This is the design's nicest trick: you can
-wire every cable once and leave it. A prompt saved in T2VA mode emits nothing
-but the prompt even with `picture_1` still plugged into `first_frame`; switch
-the editor to I2VA and **Save**, and picture 1 flows again. Withheld media is
-greyed out in the editor rail and printed to the console on each run.
-
-**Keyframes are not references.** In I2VA/FL2VA/L2VA the images are literal
-frames of the output, so they go to `first_frame` / `last_frame` on **Image to
-Video** — never to the `ref_images` slots, which mean "draw from this", not
-"this is a frame".
-
----
-
-## 7. Video length must match the prompt
-
-H3 accepts only lengths on a **17k + 5 grid at 24 fps**. The editor snaps your
-chosen duration and prints the frame count; for FL2VA/L2VA the prompt states
-when the last frame lands, so the two have to agree.
-
-| Frames | Seconds |
-|---|---|
-| 56 | 2.33 |
-| 73 | 3.04 |
-| 90 | 3.75 |
-| 107 | 4.46 |
-| 124 | 5.17 |
-| 141 | 5.88 |
-| 158 | 6.58 |
-| 175 | 7.29 |
-| 192 | 8.00 |
-
-Put the number the editor shows into the native node's `length`.
-
----
-
-## 8. Writing the prompt
-
-### Toolbar does the fiddly formatting
-
-Inserting numbered shots with correct cut times, writing camera moves as
-sentences, wrapping dialogue in language tags and speaker IDs, and dropping in
-reference tags. The literal formats it emits:
-
-- shot markers — `[Shot 2] at 00:03.000` (strict `MM:SS.mmm`)
-- dialogue — `<d>[English] line goes here</d>` with speaker IDs like `(S1)` or `(S1,S2)`
-- languages available — English, Chinese, Japanese, Korean, French, German, Italian, Spanish, Portuguese, Russian, Arabic
-- reference tags — `<Picture 1>`, `<Video 2>`, `<Audio 3>`, `<Subject 1>`
-
-Click a thumbnail to insert its tag rather than typing it. Tags render as
-colour-coded chips with hover previews; a tag with nothing behind it turns red
-as you type.
-
-### What it checks as you write
-
-Shots numbered in order, cut times increasing and inside the video's length,
-`[Shot 1]` not carrying a timestamp, `<d>` tags balanced and language-labelled,
-a `[Shot 1]` opening present, references connected but never mentioned, and in
-REF mode every subject having a matching retention entry.
-
-**Amber = advisory, saves anyway. Red = fix it before rendering.**
-
-### What the generated prompt looks like
-
-*Base modes (T2VA / I2VA / FL2VA / L2VA)* — an auto-written alignment line for
-the keyframe modes, then:
-
-```
-integrated_multimodal_description: …
-
-overall_soundscape: …
-
-non_diegetic_music: N/A
-```
-
-*Reference mode* — six blocks:
-
-```
-subject_definitions:
-<Subject 1> is the woman in <Picture 1>, with …
-
-summary:
-[reference generation] …
-
-retention_analysis:
-<Picture 1> ([Shot 1] first frame): fully_preserved - …
-
-detailed_description:
-…
-
-overall_soundscape:
-…
-
-non_diegetic_music:
-N/A
-```
-
-**Summary task types** (combinable, joined with ` + `): `keyframe completion`,
-`reference generation`, `video editing`, `video continuation`, `audio reuse`,
-`audio reference`.
-
-**Retention markers** — visual: `fully_preserved`, `partially_preserved`,
-`attribute_transfer`, `weak_reference`. Audio: `fully_copy`, `partially_copy`,
-`reference`, `weak_reference`.
-
-### Picture role chips (reference mode)
-
-Start a definition line with `<Picture N>` and role chips appear. Each writes
-the definition, the retention marker and the summary task type together:
-
-| Chip | Marker | Task type |
+| Node | What it is for | Need it? |
 |---|---|---|
-| First frame | `fully_preserved` | keyframe completion |
-| Last frame | `fully_preserved` | keyframe completion |
-| Composition | `weak_reference` | reference generation |
-| Look / style | `weak_reference` | reference generation |
-| Setting | `partially_preserved` | reference generation |
-| Attribute → subject | `attribute_transfer` | reference generation |
-| Storyboard | `weak_reference` | reference generation |
+| **Fantastic H3 Prompt Builder** | The main event. Click its **Edit prompt…** button to open a full-screen editor with fillable fields. Outputs your finished prompt. | Yes |
+| **Fantastic H3 Media Loader** | Drag and drop your pictures, clips and sounds onto it. Shows you exactly which tag each one will get. | Yes, if you use any media |
+| **Fantastic H3 Reference Splitter** | Fans a bundle of media out into individual wires. Only needed if you want media to reach the sampler *without* passing through the Prompt Builder. | Rarely |
+| **Fantastic H3 Filename Prefix** | Builds a save path with today's date already filled in. Solves a specific annoyance — see section 16. | Optional |
+**Capacity:** the Prompt Builder handles up to **9 pictures, 3 videos, 3 video soundtracks and 3 standalone audio clips**. Those limits come from H3 itself, not from this pack.
 
-There is deliberately **no "identity" chip**. A picture that merely shows what a
-character looks like belongs cited *inside* that subject's line
-(`<Subject 1> is the woman in <Picture 1>, …`), not as a standalone picture
-definition. Standalone `<Picture N>` lines are for pictures playing a role in
-their own right.
+## 6. Your first video, step by step
 
-### Switching lines off
+This walkthrough uses **T2VA** — text only, no pictures. It is the simplest mode and the fastest way to confirm everything works.
 
-Every line in `subject_definitions` and every row in `retention_analysis` has a
-◉ switch: the line greys out and **drops out of the generated prompt** while
-staying in the editor. Section headings have the same switch for
-`subject_definitions`, `retention_analysis`, `overall_soundscape` and
-`non_diegetic_music`. `summary` and the description can't be switched off.
+1. Load ComfyUI's built-in MiniMax H3 template so you have a working graph — model loader, sampler, VAE decode, save.
+2. Double-click the canvas, search **Fantastic H3 Prompt Builder**, and drop one onto the graph.
+3. Click the node's **Edit prompt…** button. A large editor opens.
+4. Along the top of the editor are the five mode buttons. Click **T2VA**.
+5. Fill in the description field. Write what happens, plainly and in order. The right-hand panel builds the finished prompt live as you type — watch it.
+6. Click **Save to node**. This is the *only* button that changes what the node will send.
+7. Back on the canvas, drag a wire from the Prompt Builder's **prompt** output to the **prompt** input on the **MiniMax H3 Image to Video** node.
+8. Set `width`, `height` and `length` on that H3 node. For length, see section 8 — H3 only accepts certain numbers.
+9. Queue it.
 
-Validation follows suit — a switched-off definition doesn't count as defined.
+> **If `prompt` is a text box rather than a socket…** …right-click it and choose *Convert widget to input*. Then you can wire into it.
 
----
+> **Only Save to node commits.** The ✕ button, Cancel and the Escape key all throw your edits away. If you close the editor with unsaved changes it will ask first — Save to node, Discard, or Keep editing. Get in the habit of clicking Save to node.
 
-## 9. Reference mode wiring
+## 7. The five modes
 
-1. On the Prompt Builder click **+ Media loader** — one appears, already
-   connected.
-2. Drop files on it (or **Load files…**). Images, video and audio can go in
-   together; each lands in the right group.
-3. **Edit prompt… → Reference**. Your media is now clickable thumbnails.
-4. Fill the six sections, **Save to node**.
-5. Wire the builder's media outputs to **MiniMax H3 Reference to Video**:
+The mode you pick decides what kind of input the model gets. Choose it from the buttons at the top of the editor.
+
+| Mode | You give it | Use it when |
+|---|---|---|
+| **T2VA** | Text only | Building a scene from nothing. |
+| **I2VA** | One picture, used as the **first frame** | You have an image and want it to start moving. |
+| **FL2VA** | Two pictures — **first** and **last** frame | You know where it starts and where it ends, and want the model to get from A to B. |
+| **L2VA** | One picture, used as the **last frame** | You know the ending and want the model to invent a plausible run-up to it. |
+| **REF** | Any mix of up to 9 pictures, 3 videos and 3 sounds | Locking a character's face, a visual style, a voice, or a motion across shots. |
+
+### The clever bit: the mode gates your wires
+
+This is worth understanding early, because it saves you a lot of re-plugging.
+
+**The mode you saved decides which media actually leaves the node.** You can wire every cable once and then leave the workflow alone forever. A prompt saved in T2VA mode sends nothing but text — even with a picture still plugged into `first_frame`. Switch the editor to I2VA, click Save to node, and that picture starts flowing again.
+
+Media that is being held back is greyed out in the editor, and the console prints exactly what was withheld on every run — so you can always see what is happening.
+
+## 8. Getting the video length right
+
+H3 will not accept just any frame count. Valid lengths follow a fixed pattern at 24 frames per second, so most round numbers are wrong.
+
+You do not have to calculate this. **Type the duration you want in the editor and it tells you the exact frame count to use.** Copy that number into the `length` field on the H3 node.
+
+| Frames | Seconds | Frames | Seconds |
+|---|---|---|---|
+| 56 | 2.33 | 141 | 5.88 |
+| 73 | 3.04 | 158 | 6.58 |
+| 90 | 3.75 | 175 | 7.29 |
+| 107 | 4.46 | 192 | 8.00 |
+| 124 | 5.17 | 209 | 8.71 |
+
+> **Why it matters more in FL2VA and L2VA.** In those modes the prompt itself states the moment your last frame lands. If the prompt says 5.88 seconds and you generate 90 frames, the prompt and the video disagree and the result suffers. Use the number the editor gives you.
+
+## 9. Working with pictures (I2VA, FL2VA, L2VA)
+
+These three modes take **keyframes** — pictures that are literal frames of the output.
+
+### Where the pictures go
+
+They go to the **MiniMax H3 Image to Video** node, into its `first_frame` and `last_frame` inputs:
+
+- **I2VA** — your picture → `first_frame`
+- **FL2VA** — first picture → `first_frame`, second picture → `last_frame`
+- **L2VA** — your picture → `last_frame`
+
+> **Do not put keyframes into ref_images.** The `ref_images` slots exist only on the Reference to Video node, and they mean "here is something to draw from" — not "here is a frame." Keyframes belong in first_frame and last_frame. This is the mistake to avoid.
+
+### Two ways to load them
+
+**Straightforward:** use ComfyUI's ordinary **Load Image** nodes and wire them directly into the H3 node. This works perfectly.
+
+**With previews:** route the image through the Prompt Builder first — into its `picture_1` input, and back out of its matching `picture_1` output. Do this and your picture shows up as a thumbnail inside the editor while you write, so you can click it to insert its tag. You can also split the wire and do both at once.
+
+**Least wiring:** drop your pictures on the **Media Loader**, run its single `references` output into the Prompt Builder, and take your frames from the builder's `picture_1` and `picture_2` outputs.
+
+These modes take one picture each, except FL2VA which takes two. Connect more and the editor tells you which ones will be ignored.
+
+## 10. Reference mode
+
+Reference mode is where H3 gets interesting: you hand it pictures, clips and sounds to *draw from* — a face to keep consistent across shots, a lighting style, a voice, a camera movement. It uses the **MiniMax H3 Reference to Video** node and the `ref2va` model.
+
+### The short version
+
+1. On the Prompt Builder, click **+ Media loader**. One appears, already wired up.
+2. Drag your files onto it, or click **Load files…**. Pictures, video and audio can go in all at once — each lands in the right group automatically.
+3. Open **Edit prompt…** and click **Reference**. Your media now appears as clickable thumbnails down the side.
+4. Fill in the six sections (see below). Click a thumbnail whenever you want to mention that piece of media — it inserts the tag for you.
+5. Click **Save to node**.
+6. Wire the builder's media outputs across to the Reference to Video node, using the map below.
+
+### Which output goes where
 
 | Prompt Builder output | Reference to Video input |
 |---|---|
 | `prompt` | `prompt` |
-| `picture_1 … picture_9` | `ref_image_0 … ref_image_8` |
-| `video_1 … video_3` | `ref_videos` slots |
-| `video_audio_1 … video_audio_3` | `ref_video_audios` slots |
-| `audio_1 … audio_3` | `ref_audios` slots |
+| `picture_1` … `picture_9` | the `ref_images` slots |
+| `video_1` … `video_3` | the `ref_videos` slots |
+| `video_audio_1` … `video_audio_3` | the `ref_video_audios` slots |
+| `audio_1` … `audio_3` | the `ref_audios` slots |
 
-⚠️ **Ours are 1-based, the native node's are 0-based** — `picture_1` goes to
-`ref_image_0`. Keep them in the same order.
+> **Watch the numbering when you wire.** This pack counts from 1, the native H3 node counts from 0. So `picture_1` goes into `ref_image_0`, `picture_2` into `ref_image_1`, and so on. Just keep them in the same order and you will be fine.
 
-Empty slots pass through empty and the H3 node skips them, so wiring all of them
-once and leaving the workflow alone is the intended way to work.
+Empty slots pass through empty and the H3 node ignores them, so wiring all of them once and leaving the graph alone is exactly how this is meant to be used.
 
-### You don't have to use the Media Loader
+### You are not obliged to use the Media Loader
 
-Three routes, and 1 and 2 mix freely (a slot with its own input wins over the
-bundle):
+Three routes all work, and the first two mix freely — if a slot has its own wire, that wins over the Media Loader's bundle:
 
-1. **Media Loader → Prompt Builder.** One cable. Previews and tag numbering come free.
-2. **Your own loaders → Prompt Builder** `picture_1` / `video_1` / `audio_1` inputs.
-3. **Loaders straight to the native node.** Well-formed prompt, no thumbnails in the editor.
+- **Media Loader → Prompt Builder.** One cable. Thumbnails and correct tag numbering come free.
+- **Your own loaders → Prompt Builder.** Wire `LoadImage` and friends into the `picture_1`, `video_1`, `audio_1` inputs.
+- **Loaders straight to the H3 node.** Skip this pack's media handling entirely. You still get a well-formed prompt; you just do not get thumbnails while writing.
 
-The **Reference Splitter** exists only for getting media to the sampler
-*without* passing through the builder (Media Loader → Splitter → native node).
+### The six sections in reference mode
 
----
+The editor gives you six labelled boxes. In plain terms:
 
-## 10. The rule people get wrong: tag numbering
+| Section | What goes in it |
+|---|---|
+| **subject_definitions** | Who and what is in the video. *"`<Subject 1>` is the woman in `<Picture 1>`, mid-thirties, dark coat."* |
+| **summary** | One line saying what job you are asking the model to do. The editor tags it with a task type for you. |
+| **retention_analysis** | For each reference, how strictly it should be obeyed. Chips fill this in for you — you rarely type it by hand. |
+| **detailed_description** | The actual scene: shots, action, camera, dialogue. This is where most of your writing goes. |
+| **overall_soundscape** | The sounds that exist in the scene — rain, traffic, footsteps. |
+| **non_diegetic_music** | Background score that the characters cannot hear. Leave it and it writes `N/A`. |
+Two of these are compulsory — **summary** and **detailed_description**. Without them there is no prompt. The other four each have a ◉ switch on the heading that removes the whole section from the output while leaving your text in the editor.
 
-**H3 numbers references by arrival order, not by which slot you plugged them
-into.** Two consequences:
+#### Picture roles — the shortcut worth knowing
 
-- **Gaps close up.** Fill only `picture_2` and `picture_5` and they become
-  `<Picture 1>` and `<Picture 2>`.
-- **A video's soundtrack takes a low audio number.** It is presented right
-  before its own video — so one video-with-sound plus one standalone audio clip
-  makes the soundtrack `<Audio 1>` and the standalone `<Audio 2>`.
+Start a line in **subject_definitions** with `<Picture N>` and a row of role chips appears underneath. Click one and it writes the definition, sets the strictness marker, and adds the right task type — three jobs in one click.
 
-Don't work this out by hand. The Media Loader prints the exact tag order along
-the bottom of the node, and the editor labels each thumbnail with the tag it
-will really get. Trust those over intuition.
+| Chip | Means | Strictness |
+|---|---|---|
+| First frame / Last frame | This picture is an exact frame | `fully_preserved` |
+| Composition | Copy the framing, not the content | `weak_reference` |
+| Look / style | Copy the mood and grade | `weak_reference` |
+| Setting | Reuse this location | `partially_preserved` |
+| Attribute → subject | Give this trait to a character | `attribute_transfer` |
+| Storyboard | Use as staging guidance | `weak_reference` |
 
-Note that **reordering or disabling media changes its tag but does not rewrite
-your prompt** — you have to fix the text yourself.
+> **There is no "identity" chip, on purpose.** A picture that simply shows what a character looks like should be mentioned inside that character's own line — `<Subject 1> is the woman in <Picture 1>, with …` — not given a standalone picture definition. Standalone picture lines are for pictures playing a role in their own right.
 
----
+## 11. Writing text that H3 understands
 
-## 11. Budgets — three separate ones
+Everything so far has been about the machinery — which node, which wire, which button. This section is about the words themselves, because H3 has firm opinions about those too.
 
-1. **12 references total.** A video whose audio is `paired` or `alone` costs
-   **two** (the soundtrack is its own reference). Set it `off` and you get one
-   back. Going over shows red; the node refuses to silently drop anything,
-   because removing a reference renumbers every tag after it.
-2. **3 audio clips.** A split-off soundtrack counts as one, even though it
-   travels on a different input group. Three videos with sound on therefore
-   consume the entire audio allowance.
-3. **2–15 seconds per clip, and 15 seconds is the TOTAL across all clips of a
-   type**, not per-clip. Three 15-second audio clips is 45 s — three times over.
-   Three clips only fit at ~5 s each. A 12-second video with audio on spends 12
-   of your 15 video seconds *and* 12 of your 15 audio seconds.
+All of it comes from MiniMax's own **Video Prompt Writing Guide**, which ships inside this node pack. Two ways to open it:
 
-Also: **audio cannot be sent without at least one image or video alongside it.**
+- Click the **📖** button in the editor header.
+- Or open it straight in your browser while ComfyUI is running: `http://127.0.0.1:8188/extensions/ComfyUI-Fantastic-MiniMaxH3-PromptBuilder/Video_Prompt_Writing_Guide.pdf` — change the address and port if your ComfyUI is not on the default.
+It is twenty pages and worth reading properly once. What follows is the part you will use daily.
 
-The loader shows both counters (files and ♪ audio) and warns on each. The usual
-fix is the ✂ trim, not a re-export.
+### Open with style and composition
+
+The very start of `[Shot 1]` should establish the overall look and the opening framing, before anything moves. The guide's suggested styles: **cinematic, live-action, 2D-animated, 3D CG, claymation, watercolour, vintage film.** For picture modes, take the style from your reference image; for T2VA, pick it deliberately.
+
+```
+[Shot 1] Live-action, cinematic, a medium-wide shot frames...
+```
+Then keep going along the timeline. Every detail you write should correspond to something actually visible or audible — appearance, position, props, actions, reactions, cuts, speech, and the sounds that go with them.
+
+### Shots and cuts
+
+- **`[Shot 1]` never carries a timestamp.** Later shots always do, and the times must strictly increase and land inside your video's duration.
+- Format is exact: `[Shot 2] At 00:03.500, the camera cuts to…`
+- Approved phrasings for an ordinary cut: *the camera cuts to*, *the shot cuts to*, *the shot transitions to*, *the shot changes to*, *the shot switches to*. Use cross-dissolve, fade or wipe only when you actually want one.
+
+> **When to cut and when to move the camera.** A cut should introduce genuinely new information — a new subject, space, state, viewpoint or moment in time. If all you want is a slightly different distance or angle, move the camera instead. Cutting for nothing wastes a shot.
+
+### Camera motion
+
+A camera move has three parts: **type, amplitude and speed.** Only the type is required — add amplitude and speed when they matter, since medium amplitude at normal speed is the assumed default and saying so just adds noise.
+
+| Motion type | What it does |
+|---|---|
+| Zoom In / Zoom Out | Focal length changes; the camera body stays put |
+| Push In / Pull Out | The camera itself moves forward or back |
+| Pan Left / Pan Right | Camera stays put, lens pivots horizontally |
+| Truck Left / Truck Right | The camera slides sideways |
+| Tilt Up / Tilt Down | Camera stays put, lens pivots vertically |
+| Pedestal Up / Pedestal Down | The whole camera rises or drops |
+| Arc Shot | The camera curves around the subject |
+| Tracking Shot | The camera follows a moving subject |
+| Static Shot | Nothing moves |
+| Shake Slightly / Shake Strongly | Camera shake |
+| POV | The subject's own point of view |
+| Roll Clockwise / Roll Counterclockwise | The camera rolls around the lens axis |
+Amplitude is written `with small amplitude` or `with large amplitude`; speed is `at slow speed` or `at fast speed`.
+
+> **Write the move as a sentence, not a label.** Do not staple "(push in, slow)" onto the end of a line. Fold it into the action:
+
+```
+The camera pushes in with small amplitude at slow speed toward the
+folded letter in her hands.
+
+The camera pans right with large amplitude at fast speed, revealing
+the open doorway.
+```
+
+### Speakers and dialogue
+
+Anyone who speaks, sings, or is heard off-screen gets a stable ID — `(S1)`, `(S2)` — and **keeps that same ID for the whole video**. Characters who never make a sound get no ID at all. Two people speaking at once share a compound ID: `(S1,S2)`.
+
+When a speaker first appears, give enough detail to fix their identity: type of character, age, gender, whether they are on screen, and how they sound — pitch, timbre, pace, accent.
+
+> **The one rule to remember about <d> tags.** Everything about who is speaking and how goes OUTSIDE the tags. Inside the tags goes only the language marker and the exact words spoken — preserved verbatim, punctuation and all, never translated or tidied up.
+
+```
+The young woman with a quiet, breathy voice (S1) says:
+<d>[English] I get off at the next station.</d>
+
+The two children (S1,S2) shout together,
+<d>[English] Wait for us!</d>
+```
+**Voiceover** has its own required phrasing — the exact words *says in an off-screen voiceover* — and you must state immediately afterwards that the character's lips stay shut, or the model will animate them talking:
+
+```
+The man (S1) says in an off-screen voiceover: <d>[English] I still
+remember that road.</d> while his lips remain completely closed.
+```
+The editor's dialogue row writes this for you, including the lips-closed clause, so you rarely have to remember it.
+
+Two more tags for edge cases: `<scenetrans>` goes at the joining point in **both** halves when one spoken line carries across a cut (and you should say in words that the audio continues), and `<cutoff>` marks speech chopped off by the end of the video.
+
+### On-screen text
+
+Any sign, banner, label or subtitle that is genuinely visible goes in **double quotation marks**, verbatim and untranslated:
+
+```
+A red neon sign reading "OPEN" glows above the doorway.
+```
+
+### The two sound sections
+
+| Section | The rules |
+|---|---|
+| **overall_soundscape** | One to four sentences, one continuous paragraph. Ambient sound, physical action sounds, and non-verbal human sounds — wind, rain, traffic, footsteps, fabric, impacts, breathing, laughter. **Do not repeat dialogue, singing or in-scene music here** — those live in the description. Use `N/A` only if you genuinely want total silence. |
+| **non_diegetic_music** | One to three sentences covering instrumentation, tempo and dynamics. This is score the characters cannot hear. `N/A` is perfectly normal here. |
+
+```
+overall_soundscape: Steady rain taps against the cafe windows while
+low room ambience continues underneath. The entrance bell rings once,
+followed by wet footsteps and the soft scrape of a chair.
+```
+
+### Reference mode: what the strictness markers actually mean
+
+In `retention_analysis` you give every reference a marker saying how strictly to obey it. The editor's role chips usually pick these for you, but this is what they mean:
+
+| Marker (pictures, videos, subjects) | Meaning |
+|---|---|
+| `fully_preserved` | The reference's defined role is kept completely. |
+| `partially_preserved` | Still used, but some defined characteristics change or are only partly kept. |
+| `attribute_transfer` | Take these characteristics and give them to a *different* subject. |
+| `weak_reference` | Keep only a broad similarity — style, category, composition, atmosphere. |
+| Marker (audio) | Meaning |
+|---|---|
+| `fully_copy` | The whole source audio becomes the video's complete final audio track. |
+| `partially_copy` | Only part of it is copied, or things are added, removed or replaced afterwards. |
+| `reference` | Nothing is copied — only the timbre, rhythm, style, content or texture is followed. |
+| `weak_reference` | Only a broad similarity of category or atmosphere. |
+The line format is `<label> (where it appears): marker - explanation`, for example:
+
+```
+<Subject 1> (appears in [Shot 1], [Shot 3]): fully_preserved - ...
+<Picture 2> ([Shot 1] first frame): fully_preserved - ...
+<Video 1> (cut and pacing structure): weak_reference - ...
+<Audio 2>: reference - the target speaker follows <Audio 2>'s voice
+  timbre and measured delivery without copying the original signal.
+```
+
+### Task types, and a trap
+
+The `summary` line opens with the kind of job you are asking for. Combine several with `+` when a job genuinely does several things — *[video continuation + keyframe completion]* — but never repeat one.
+
+| Task type | Use it when |
+|---|---|
+| `keyframe completion` | An image is a concrete frame anchor — first frame, last frame, a keyframe. |
+| `reference generation` | An image, video or sound guides a character, scene, style, action, camera move or storyboard **without** being a literal frame or an edited source. |
+| `video editing` | An existing source video is directly modified. |
+| `video continuation` | New content continues, extends or resumes from an existing source video. |
+| `audio reuse` | The same audio signal is reused, in whole or in part. |
+| `audio reference` | The audio is not copied — only its style, timbre, content, texture or beat is followed. |
+
+> **The trap.** Attaching a video or an audio clip does not automatically earn the matching task type. A reference video that only supplies camera movement, cuts or rhythm is `reference generation` — not `video editing`. Use editing or continuation only when that video is genuinely being edited or continued.
+
+### The checklist, condensed
+
+MiniMax's guide ends with a checklist. The points worth a final glance before you queue:
+
+- `[Shot 1]` has no timestamp; every later cut time increases and sits inside the duration.
+- Every cut introduces genuinely new information.
+- Camera motion reads as natural action, with amplitude and speed only where meaningful.
+- Speaker IDs are stable across shots; silent characters have none.
+- `<d>` contains only the language tag and the exact words.
+- Voiceovers use the required phrase and a closed-lips statement.
+- On-screen text is in double quotes and untranslated.
+- `overall_soundscape` is one to four sentences and repeats no dialogue or music.
+- `N/A` appears only where it is genuinely warranted.
+**In reference mode, additionally:** all six sections present and in order; every label defined once and used consistently; the task-type prefix matches what each reference really does; no new labels invented in `summary`; **no speaker IDs anywhere in `retention_analysis`**; and the style established in a sentence or two before `[Shot 1]`.
+
+> **The good news.** The editor checks a large share of this list for you as you type — shot numbering, cut times, unbalanced or unlabelled dialogue tags, references you connected but never mentioned, and subjects missing a retention entry. Amber warnings are advisory; red ones are worth fixing before you render.
+
+## 12. Tag numbering — the rule that catches everyone
+
+Your prompt refers to media by tags: `<Picture 1>`, `<Audio 2>`. It is very tempting to assume `<Picture 3>` means "the one plugged into slot 3." **It does not.**
+
+> **H3 numbers references by the order they arrive, not by which slot they occupy.**
+
+Two consequences:
+
+- **Gaps close up.** Fill only `picture_2` and `picture_5`, leaving the rest empty, and they become `<Picture 1>` and `<Picture 2>`.
+- **A video's soundtrack takes a low audio number.** It is presented immediately before its own video. So with one video that has sound plus one separate music clip, the soundtrack is `<Audio 1>` and your music file is `<Audio 2>` — even though you added the music first.
+You do not have to work any of this out. The **Media Loader prints the exact tag order along the bottom of the node**, and every thumbnail in the editor is labelled with the tag it will really get. Trust those two displays over your intuition, every time.
+
+> **Reordering media does not rewrite your prompt.** If you drag media into a different order, or switch a piece off, the tags change — but the text you already typed does not. You have to update it yourself. The editor will show the now-wrong tags in red.
+
+## 13. The limits you cannot exceed
+
+There are three separate budgets, and they are counted independently. Most confusion here comes from assuming there is only one.
+
+#### 1. Twelve references, total
+
+Across everything — pictures, videos and sounds. **A video whose audio is switched on costs two**, because its soundtrack counts as a reference in its own right. Set that video's audio to `off` and you get one back.
+
+Go over twelve and you get a red warning. The node deliberately refuses to drop anything for you, because removing a reference renumbers every tag after it and would quietly break the text you already wrote.
+
+#### 2. Three audio clips
+
+A soundtrack split off from a video counts as one of the three, even though it travels along a different wire. So three videos with their sound on will use your entire audio allowance.
+
+#### 3. Two to fifteen seconds — and fifteen is the TOTAL
+
+This is the one people miss. Each clip must run between 2 and 15 seconds, **and 15 seconds is the total across all clips of a type, not an allowance per clip.**
+
+- Three 15-second audio clips is 45 seconds — three times over budget.
+- Three clips only fit if they average about five seconds each.
+- A 12-second video with its sound on spends 12 of your 15 video seconds *and* 12 of your 15 audio seconds, leaving 3 seconds of audio for anything else.
+Also: **audio cannot be sent on its own.** There must be at least one picture or video alongside it.
+
+The Media Loader shows both counters — files and audio seconds — and warns you as soon as either is exceeded. The usual fix is trimming (section 14), not re-exporting your files.
 
 ### off / paired / alone
 
-The control on a video row that has sound:
+Any video that has sound gets a small three-way control. What to pick:
 
-- **paired** — the sound belongs to this footage: on-screen dialogue where lip
-  sync matters, action sounds that must land on the right frames, keeping a
-  source clip's original audio.
-- **alone** — you want the audio as a *reference*: borrowing a voice, a music
-  style, some ambience. Also right when you aren't reusing the visuals in sync.
-- **off** — ignore the audio, and get a reference slot back.
-
----
-
-## 12. Trim, crop and memory
-
-The **✂** button on a video or audio row (or **▣** on a picture tile) opens a
-non-destructive editor. **The file on disk is never modified** — the trim, crop,
-rotation, mirror and size cap are stored on the item and applied at decode time,
-so the same file behaves differently in another workflow and Reset restores it.
-
-Timeline controls: click or drag the bar to scrub, drag the two blue handles to
-set the kept range, `◀| |▶` step a frame, `⇤ start` / `end ⇥` snap the range to
-the playhead, `⏮ First` / `Last ⏭` jump to the clip's ends. An amber playhead
-turns red when you scrub outside the kept range.
-
-| Key | Action |
+| Setting | Choose it when |
 |---|---|
-| ← → | step one frame (shift = ten) |
-| space | play / pause the selected span |
-| `[` `]` | set start / end to the playhead |
-| home / end | jump to start / end of selection |
-| M | mute the preview |
-| A | save the kept range as an audio reference |
-| C | capture the current frame (video only) |
-| esc | close without applying |
+| **paired** | The sound belongs to this footage — on-screen dialogue where lip sync matters, action sounds that must land on the right frames, or you are keeping a source clip's original audio. |
+| **alone** | You want the sound as a reference rather than as this clip's soundtrack — borrowing a voice, a music style, some ambience. Also right when you are not reusing the visuals in sync. |
+| **off** | Ignore the audio entirely. Gives you a reference slot back. |
 
-- **`last 2s` / `last 3s`** grab a clip's tail in one click — exactly what a
-  video continuation reference wants.
-- **📷 Use frame** writes the frame you're looking at into ComfyUI's input
-  folder and adds it as a picture reference. This is the clean way to continue
-  from a clip: scrub back a little from the very last frame (usually the
-  blurriest), capture, and wire that picture to `first_frame` in I2VA mode. If
-  all 12 references are in use the frame is still captured but arrives switched
-  off; it's only refused outright when all nine picture slots are full.
-- **🎵 Use audio** writes the kept range out as its own WAV and adds it as a
-  standalone audio reference — how you lift a voice sample out of a longer clip.
-  Refused if the audio slots are full or the range is under 2 seconds.
-- **⇄ Mirror** (video) flips left-to-right. Useful for getting a pose or
-  composition facing the other way; a poor idea for identity references you're
-  keeping consistent, since text reverses and asymmetric details swap sides.
-- **↻ Rotate** turns a picture 90° clockwise (shift-click anticlockwise); the
-  crop rect turns with it.
+## 14. Trimming, cropping and memory
 
-### Reference video memory
+Click **✂** on a video or audio row (or **▣** on a picture) to open an editor.
 
-Reference video is decoded to raw float frames, so memory is
-`width × height × 3 × 4 bytes × frames`. Nothing is resized unless you set a
-**size** cap in the ✂ editor, which caps the long edge *during* decoding.
+> **Your original files are never modified.** Every trim, crop, rotation, mirror and size cap is stored as a note on the item and applied when the media is decoded. The same file can behave differently in another workflow, and Reset always gives you the whole thing back.
 
-| Cap on a 15 s 1080p clip | Memory |
+### Getting around the timeline
+
+Click or drag anywhere on the bar to scrub the preview. Drag the two blue handles to set what is kept — clicking the bar never moves them. An amber playhead shows where you are, and turns red if you scrub outside the kept range, so you can never be looking at a frame that is secretly excluded.
+
+| Key | Does |
 |---|---|
-| full *(default)* | ~9.0 GB |
-| 1280 px | ~4.0 GB |
-| 1024 px | ~2.5 GB |
-| 832 px | ~1.7 GB |
+| ← → | Step one frame (hold shift for ten) |
+| space | Play / pause the selected span |
+| `[`  `]` | Set the start / end to wherever the playhead is |
+| home / end | Jump to the start / end of the selection |
+| M | Mute or unmute the preview |
+| A | Save the kept range as an audio reference |
+| C | Capture the current frame (video only) |
+| esc | Close without applying |
 
-It costs less quality than you'd expect: the native H3 node rescales every
-reference to your generation's pixel area regardless, so feeding it 1080p while
-generating at 832×480 spends the memory and throws the detail away.
+### Three shortcuts worth learning
 
-**Two exceptions — leave at full:** a clip used as a motion-context continuation
-source, and any clip whose framing you're matching closely. Same for pictures:
-one used as `first_frame` or `last_frame` should be **at least as large as your
-generation**, or the model upscales it back and you see the softness.
+- **`last 2s` / `last 3s`** grab a clip's tail in one click. This is exactly what a continuation reference wants — the motion leading into your new shot, without spending your whole budget on footage the model does not need.
+- **📷 Use frame** saves the frame you are looking at into ComfyUI's input folder and adds it as a picture reference. This is the clean way to continue from a clip: scrub back slightly from the very last frame (which is usually the blurriest), capture it, and wire that picture to `first_frame` in I2VA mode.
+- **🎵 Use audio** writes the kept range out as its own WAV and adds it as a standalone audio reference. This is how you lift one spoken sentence out of a longer recording to use as a voice reference.
 
-**⬇ Write copy** makes the reduction permanent — writes a resized copy with the
-crop/rotation/mirror baked in into the input folder and points the reference at
-it, so the file, the decode and the tensor all shrink. Your original is
-untouched.
+### Reference video eats RAM — read this before loading a 4K clip
 
-One wrinkle: a trim applies to the *item*, so trimming a video trims its frames
-and its paired soundtrack together. To keep the full video but only a few
-seconds of its audio, set the video's audio `off` and load that audio
-separately, then trim the copy.
+Reference video is decoded into raw frames, so the memory cost is width × height × 3 × 4 bytes × number of frames. That adds up alarmingly fast:
 
----
+| Size cap on a 15-second 1080p clip | Memory used |
+|---|---|
+| full (the default — nothing is resized unless you ask) | about 9.0 GB |
+| 1280 px | about 4.0 GB |
+| 1024 px | about 2.5 GB |
+| 832 px | about 1.7 GB |
+Setting a **size** cap in the ✂ editor costs far less quality than you would expect, because the H3 node rescales every reference down to your generation's pixel area anyway. Feeding it 1080p while generating at 832×480 spends all that memory and then throws the detail away.
 
-## 13. Saving your work
+**Two exceptions — leave these at full:** a clip you are using as a motion continuation source, and any clip whose framing you are matching closely. Both want to be at least as large as what you are generating.
 
-### Prompt library (☰ Library)
+The same logic applies to pictures, with one important exception: a picture used as `first_frame` or `last_frame` should stay **at least as large as your generation**, or the model ends up upscaling it and you will see the softness.
 
-Saves the **editor state**, not just the finished text, so loading one puts
-every field back exactly as you left it — nothing is re-parsed, so nothing can
-be misread on the way back in. Search by name/category/mode/text, filter and
-rename categories, star favourites, delete.
+**⬇ Write copy** makes a reduction permanent — it writes a resized copy (with your crop, rotation and mirror baked in) into the input folder and points the reference at that, so the file, the decode and the memory all shrink. Your original is left exactly as it was.
 
-Saving under a different name after loading one asks explicitly: **Save as new**
-(default, and what Enter does) keeps the original, **Rename "…"** carries it
-over. Name collisions confirm inline before overwriting.
+> **One wrinkle.** A trim applies to the whole item, so trimming a video trims its picture and its soundtrack together. If you want the full video but only a few seconds of its audio, set the video's audio to `off`, load the audio file separately, and trim that copy instead.
 
-Prompts are individual JSON files in ComfyUI's user directory under
-`minimax_h3/`, written atomically — so they survive updates, back up easily, and
-a crash mid-save can't corrupt an entry.
+## 15. Saving your work
+
+### The prompt library
+
+**☰ Library** in the editor header. Saving stores the *state of every field*, not just the finished text — so loading a prompt puts you back exactly where you were, ready to edit. Nothing is re-parsed on the way back in, so nothing can be misread.
+
+You can search by name, category, mode or the prompt text itself; star favourites; and rename or clear categories across every prompt at once.
+
+If you load a prompt, change its name and save, it asks what you meant: **Save as new** keeps the original and adds a second entry (this is the default, and what Enter does), while **Rename** carries the original over. Name collisions always ask before overwriting.
+
+Your prompts are stored as individual files in ComfyUI's user folder, so they survive updates and are easy to back up.
 
 ### Phrases
 
-Wording you reuse — a house style line, a favourite camera move — saved once and
-inserted with **+ Phrase** at the caret. Create with **+ New**, or right-click a
-selection → *Save selection as phrase…*. Line breaks in a saved phrase are
-flattened, because the model reads them as shot cuts. Stored with ComfyUI, so
-they follow the install and are shared across all prompts.
+Wording you type over and over — a house style line, a camera move you like — can be saved once and dropped in with a click. Use **+ New**, or select some text, right-click, and choose *Save selection as phrase…*.
+
+> **Line breaks in a saved phrase get flattened.** That is deliberate: H3 reads a line break as a shot cut, so a multi-line phrase would silently chop your video up.
 
 ### Media presets
 
-The Media Loader saves your current reference set — which files, their order,
-each video's audio setting, and any trims — under a name. Presets **point at**
-files you already uploaded rather than copying them, so saving and loading are
-instant; delete one of those files and loading the preset skips it and says
-which is missing. Deleting a preset never deletes media.
+The Media Loader can save your current set of references — which files, what order, each video's audio setting, and any trims — under a name, and reload the lot in one click.
 
-### Draft mode (1.6.0)
+Presets *point at* files you have already uploaded rather than copying them, so saving and loading are instant. If you later delete one of those files, loading the preset skips it and tells you which one is missing. Deleting a preset never deletes your media.
 
-**Draft ▶** parks the queued Live prompt and gives you a teal scratchpad for the
-next one. It autosaves to disk in its own directory (it can never appear in your
-library or presets), survives a browser crash, and reopens where you left off.
-**Save to node** is greyed out while drafting — nothing reaches the node except
-through **Commit to Live**.
+### Draft mode
 
-A draft's media is in one of three states, and the banner always says which:
+Say you have queued a batch and want to start writing the next prompt. Click **Draft ▶** and the editor turns teal — you are now on a scratchpad that cannot be executed. The node still holds your live prompt, and nothing in the draft reaches it until you click **Commit to Live**.
 
-- **Following the node's media** — the usual case.
-- **Showing media as of when the draft started** — display only, so the draft's
-  `<Picture N>` tags keep meaning the same files if you rearrange the loader.
-- **Has its own media** — you edited it via ▣ Media. **Only this state is
-  applied to the Media Loader on commit**, so improving your Live references
-  while a draft sits open is safe.
+Drafts autosave to disk as you type, survive a browser crash, and reopen where you left off. **Save to node** is greyed out the whole time you are drafting, which is the point.
 
-**⇣ Pull from Live** copies the Live prompt across, either *Cast and setup only*
-(mode, duration, subject definitions, style, retention markers — the shape for
-writing the next shot in a scene) or *Everything* (for working up a variant).
-Live is never changed by drafting.
+**⇣ Pull from Live** copies your live prompt into the draft so you do not retype a cast you have already written. It offers two scopes: *Cast and setup only* keeps the mode, duration, subjects and style but leaves the description empty — the right shape for writing the next shot in a scene — while *Everything* is a straight copy for working up a variant.
 
-Drafts are per Prompt Builder node, capped at the 25 most recently touched
-across all workflows; older ones age out.
+> **Drafting will not disturb your live references.** A draft only applies its media to the Media Loader if you actually edited the draft's media. If you never touched it, committing changes nothing about your loader — so improving your live references while a draft sits open is safe.
 
----
+## 16. Dated output folders
 
-## 14. Dated output folders
+A small annoyance this node solves. Save nodes only expand date tokens like `%date:yyyy-MM-dd%` when you type them **directly into the save node's own box**. Route that text through a string node or a switch and the token arrives untouched — you end up with a folder literally named `%date:yyyy-MM-dd%`. This is a known issue in VideoHelperSuite among others.
 
-Save nodes only expand `%date:…%` tokens typed **directly into their own
-widget**. Route a prefix through a string node or a switch and the token arrives
-verbatim — you get a folder literally named `%date:yyyy-MM-dd%`. That's a known
-issue in VideoHelperSuite among others.
+**Fantastic H3 Filename Prefix** builds the path from parts and works the date out itself, so what reaches the save node is a plain string that survives any amount of wiring.
 
-**Fantastic H3 Filename Prefix** resolves the date itself and hands the save node
-a plain string:
-
-- **folder** — **📁 Browse…** walks your ComfyUI output directory (click to
-  enter, `..` up, **Create** to make one), or type a path.
-- **subfolder** — optional extra levels, created if missing (`Ref2V`, `client/act2`).
-- **date_folder** — off, or `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY-MM-DD_HH-MM`, …
-- **filename** — the save node still appends its own counter.
-
-`MiniMaxH3` + `Ref2V` + `YYYY-MM-DD` + `vid` →
-`MiniMaxH3/Ref2V/2026-08-21/vid_00001.mp4`.
-
-Date tokens still work inside **subfolder** and **filename** in either dialect —
-`%date:hhmm%` or strftime `%H%M` — and the node re-evaluates every run, so the
-date can't get stuck at whatever it was when the workflow loaded.
-
----
-
-## 15. The example workflow
-
-**MMH3PromptBuilder_AIO_Example** — ComfyUI's *Workflows → Browse Templates →
-this pack*, or open `example_workflows/MMH3PromptBuilder_AIO_Example.json`
-directly. It needs
-[VideoHelperSuite](https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite) for
-video output and [KJNodes](https://github.com/kijai/ComfyUI-KJNodes) for the
-Set/Get nodes.
-
-It's set up for a **4-step turbo LoRA with Sigma Shift at 12 video / 6 audio**.
-That audio value is deliberate: the released base configuration is 12/3, but
-distilled turbo LoRAs compress the video trajectory, and since the audio
-schedule is derived from the video one, 6 keeps audio aligned at low step
-counts. **Running base FL2VA without a turbo LoRA? Put it back to 3.**
-
-### One loader, two pipelines
-
-The builder's last output, `references`, is the bundle it received *gated to the
-saved mode*, ready for a Reference Splitter. So one Media Loader + Prompt
-Builder can drive both an fl2va and a ref2va pipeline: route `references`
-through a Set/Get pair into each pipeline's own splitter and keep one bypassed.
-Switch to FL2VA and Save and the ref2va splitter receives only pictures 1–2;
-switch to REF and the full set flows. Gating lives in one place no matter how
-many pipelines fan out.
-
----
-
-## 16. Troubleshooting
-
-**The nodes don't appear.** ComfyUI needs a full restart, not a page refresh.
-Check the startup console for errors mentioning `MiniMaxH3`.
-
-**The node appears but has no panel or buttons** (you can see `media_state` or
-`builder_state` as a plain text widget). Python registered fine; the frontend
-script failed. In order of likelihood:
-
-1. **Stale browser cache** — Python reloads on restart, JavaScript doesn't.
-   Ctrl+Shift+R, or an incognito window.
-2. **Another extension throwing during load**, which can stop later ones
-   registering. F12 → the first red error usually names the culprit, and it
-   often isn't this pack.
-3. **Partial install** — `custom_nodes/<pack>/web/` must contain
-   `promptbuilder.js`, `medialoader.js`, `fileprefix.js` and the guide PDF.
-
-If this pack is the one failing the node shows a **⚠ UI failed** button; click
-it for the error text and include that in a bug report.
-
-**I updated but nothing changed.** ComfyUI caches extension files aggressively.
-F12 → Network tab → tick *Disable cache*, reload with DevTools open. If a node's
-*outputs* look wrong specifically, that's a restart issue, not a browser one —
-and nodes already placed in a workflow keep their old slots, so delete and re-add
-them after an update.
-
-**Videos are rejected.** Neither PyAV nor ffmpeg was found. Check whether ffmpeg
-is on your PATH before installing anything; otherwise `pip install av` into
-ComfyUI's environment.
-
-**The media loader looks empty after opening a workflow.** Fixed in 1.5.7 —
-earlier versions could overwrite loaded media while the workflow was still
-loading. Your files were never touched, only the node's list of them. Update.
-
-**A button does nothing.** F12, click it again, read the console. The Media
-Loader also has an **Open loader…** button that works independently of the
-on-node panel.
-
-**Something looks squashed or overlapping.** The pack supports both the classic
-node renderer and Nodes 2.0; if a panel misbehaves in one, the modal buttons
-(**Edit prompt…**, **Open loader…**) always work regardless.
-
----
-
-## 17. Quick reference card
+| Field | What to put in it |
+|---|---|
+| **folder** | Click **📁 Browse…** to walk your ComfyUI output directory — click a folder to enter it, `..` to go up, **Create** to make a new one. Or just type a path. |
+| **subfolder** | Optional extra levels, created if missing. `Ref2V`, or `client/act2`. |
+| **date_folder** | Off, or a dated folder in your preferred format — `YYYY-MM-DD`, `YYYY/MM/DD`, `YYYY-MM-DD_HH-MM` and so on. |
+| **filename** | The start of the file name. Your save node still adds its own counter on the end. |
+So folder `MiniMaxH3`, subfolder `Ref2V`, date format `YYYY-MM-DD` and filename `vid` gives you:
 
 ```
-Nodes           conditioning → video_models → Fantastic H3 …
-Capacity        9 pictures · 3 videos · 3 paired soundtracks · 3 audio
-Hard limits     12 references total · 3 audio clips · 2–15 s per clip
-                15 s TOTAL per media type · audio needs an image or video
-Length grid     17k + 5 frames @ 24 fps  (…, 90, 107, 124, 141, 158, 175 …)
-Slot offset     builder picture_1  →  native ref_image_0
-Tag numbering   by arrival order, gaps close up; soundtrack precedes its video
-Only Save…      "Save to node" commits; ✕ / Cancel / Esc discard
-Mode gates      the SAVED mode decides which media leaves the node
-Storage         ComfyUI user dir → minimax_h3/ (prompts, presets, phrases, drafts)
+MiniMaxH3/Ref2V/2026-08-21/vid_00001.mp4
 ```
+The node re-evaluates on every run, so the date can never get stuck at whatever it was when you loaded the workflow.
 
----
+## 17. When something goes wrong
 
-*Written from the pack's source at v1.6.0. Behaviour in later releases may
-differ — check the repo's README for the current changelog.*
+| Symptom | What to do |
+|---|---|
+| **The nodes do not appear at all** | ComfyUI needs a full restart, not a browser refresh. Check the startup console for errors mentioning MiniMaxH3. |
+| **A node appears but has no buttons or panel** — you just see a plain text box | The Python side loaded but the interface did not. In order of likelihood: (1) stale browser cache — press Ctrl+Shift+R, or try an incognito window; (2) another extension is throwing an error during load and stopping this one registering — press F12 and read the first red error, which often names a different pack; (3) a partial install — the `web/` folder should contain `promptbuilder.js`, `medialoader.js`, `fileprefix.js` and the guide PDF. |
+| **I updated but nothing changed** | ComfyUI caches extension files hard. Press F12, go to the Network tab, tick *Disable cache*, and reload with the tools still open. If a node's *outputs* look wrong specifically, that is a restart issue instead — and nodes already sitting in a workflow keep their old slots, so delete and re-add them after an update. |
+| **My videos get rejected** | Neither PyAV nor ffmpeg was found. Check whether ffmpeg is on your PATH before installing anything; otherwise run `pip install av` in ComfyUI's Python environment. |
+| **A button does nothing** | Press F12 to open the browser console and click it again — any failure prints there. The Media Loader also has an **Open loader…** button that works independently of the on-node panel. |
+| **The media loader looks empty after opening a workflow** | A bug in versions before 1.5.7. Your files were never touched — only the node's list of them. Update the pack. |
+| **Something looks squashed or overlapping** | The pack supports both the classic node renderer and Nodes 2.0. If a panel misbehaves in one of them, the pop-out buttons (**Edit prompt…**, **Open loader…**) always work regardless. |
+If the pack itself is the thing failing, the node shows a **⚠ UI failed** button — click it for the error text, and include that text in any bug report.
+
+## 18. The example workflow
+
+The pack ships with a complete example. Find it in ComfyUI under **Workflows → Browse Templates**, or open `example_workflows/MMH3PromptBuilder_AIO_Example.json` directly.
+
+It needs two other packs installed: **VideoHelperSuite** for the video output, and **KJNodes** for the Set/Get nodes.
+
+> **One setting to check before you run it.** The example is built for a 4-step turbo LoRA, with Sigma Shift at 12 video / 6 audio. If you are running the base FL2VA model without a turbo LoRA, change the audio value back to 3. The released base configuration is 12/3; the 6 is there because distilled turbo LoRAs compress the video trajectory, and the audio schedule is derived from the video one.
+
+## 19. Cheat sheet
+
+|  |  |
+|---|---|
+| **Where are the nodes?** | conditioning → video_models → Fantastic H3 … |
+| **How much media?** | 9 pictures · 3 videos · 3 video soundtracks · 3 standalone audio clips |
+| **Hard limits** | 12 references total · 3 audio clips · each clip 2–15 s · **15 s total per media type** · audio needs a picture or video alongside it |
+| **Valid lengths** | at 24 fps: … 90, 107, 124, 141, 158, 175, 192 … — the editor tells you the number |
+| **Slot offset** | builder `picture_1` → native `ref_image_0` (we count from 1, it counts from 0) |
+| **Tag numbering** | by arrival order, gaps close up; a video's soundtrack comes before its video |
+| **What commits your edits?** | **Save to node** only. ✕, Cancel and Escape all discard. |
+| **What decides what gets sent?** | the mode you *saved*, not what is wired |
+| **Video costs two references** | unless its audio is set to `off` |
+| **Where is my stuff stored?** | ComfyUI's user folder, under `minimax_h3/` — prompts, presets, phrases and drafts |
+Written against version 1.6.0 of the node pack. Later releases may behave differently — check the repository's README for the current changelog.
